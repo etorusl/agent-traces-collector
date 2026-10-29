@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from typing import Any
 
@@ -46,6 +47,8 @@ This is a text-only configuration without built-in vision, audio transcription o
 
 def parse_action(content: str) -> dict[str, Any]:
     text = content.strip()
+    if text.startswith("<|tool_call>"):
+        return parse_gemma_tool(text)
     if text.startswith("```json\n") and text.endswith("```"):
         text = text[len("```json\n") : -3].strip()
     action = json.loads(text)
@@ -60,6 +63,51 @@ def parse_action(content: str) -> dict[str, Any]:
     ):
         return action
     raise ValueError("Expected exactly tool + arguments, or final_answer")
+
+
+def parse_gemma_tool(text: str) -> dict[str, Any]:
+    """Decode Gemma's flat tool arguments without eval or executing parser input.
+
+    String values are delimited by <|"|>; numeric/bool/null values use JSON syntax.
+    Only a single complete call is accepted. Python code remains an opaque string.
+    """
+    match = re.fullmatch(
+        r"<\|tool_call>call:([A-Za-z_]\w*)\{(.*)\}<tool_call\|>",
+        text,
+        re.DOTALL,
+    )
+    if not match:
+        raise ValueError("Expected one complete Gemma tool call")
+    name, body = match.groups()
+    args: dict[str, Any] = {}
+    i = 0
+    decoder = json.JSONDecoder()
+    delimiter = '<|"|>'
+    while i < len(body):
+        key_match = re.match(r"\s*([A-Za-z_]\w*)\s*:\s*", body[i:])
+        if not key_match:
+            raise ValueError("Invalid Gemma argument key")
+        key = key_match.group(1)
+        if key in args:
+            raise ValueError("Duplicate Gemma argument key")
+        i += key_match.end()
+        if body.startswith(delimiter, i):
+            start = i + len(delimiter)
+            end = body.find(delimiter, start)
+            if end < 0:
+                raise ValueError("Unclosed Gemma string argument")
+            args[key] = body[start:end]
+            i = end + len(delimiter)
+        else:
+            args[key], consumed = decoder.raw_decode(body[i:])
+            i += consumed
+        while i < len(body) and body[i].isspace():
+            i += 1
+        if i < len(body):
+            if body[i] != ",":
+                raise ValueError("Expected comma between Gemma arguments")
+            i += 1
+    return {"tool": name, "arguments": args}
 
 
 def collect_task(
@@ -162,6 +210,8 @@ def collect_task(
                 break
             try:
                 action = parse_action(content)
+                # Keep canonical actions in history, without Gemma control tokens.
+                messages[-1]["content"] = json.dumps(action, ensure_ascii=False)
             except (ValueError, TypeError) as exc:
                 summary["protocol_errors"] += 1
                 writer.emit("protocol_error", step=step + 1, error=str(exc))

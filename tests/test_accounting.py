@@ -145,3 +145,9 @@ def test_gemma4_exact_counts_include_separate_structural_overhead():
     assert measured["non_reasoning_tokens"] == 6
     raw["choices"][0]["token_ids"].pop()
     assert TokenAccounting(config).measure(raw)["reasoning_tokens"] is None
+
+
+def test_native_tool_boundary_is_charged_as_response_not_reasoning():
+    assert count_reasoning_ids(
+        [100, 45518, 107, 10, 48, 30, 106], [], [100, 45518, 107], [101], [48]
+    ) == (1, 3)

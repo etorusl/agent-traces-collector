@@ -53,6 +53,11 @@ class ModelClient:
             "qwen3": ("<think>", "</think>"),
         }[cfg.token_id_format]
         expected = (cfg.reasoning_start_token_ids, cfg.reasoning_end_token_ids)
+        if cfg.reasoning_implicit_end_token_ids:
+            if cfg.token_id_format != "gemma4":
+                raise ValueError("Implicit tool boundary is supported only for gemma4")
+            markers = (*markers, "<|tool_call>")
+            expected = (*expected, cfg.reasoning_implicit_end_token_ids)
         root = self.config.base_url.rstrip("/").removesuffix("/v1")
         result = {}
         for marker, ids in zip(markers, expected, strict=True):

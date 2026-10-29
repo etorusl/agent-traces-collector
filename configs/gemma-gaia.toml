@@ -47,3 +47,4 @@ reasoning_mode = "auto"
 token_id_format = "gemma4"
 reasoning_start_token_ids = [100, 45518, 107]
 reasoning_end_token_ids = [101]
+reasoning_implicit_end_token_ids = [48]

@@ -15,11 +15,20 @@ def split_reasoning(message: dict[str, Any]) -> tuple[str | None, str, str]:
         if isinstance(value, str) and value:
             return value, content, field
     if content.startswith("<|channel>thought\n"):
-        text = content.removeprefix("<|channel>thought\n")
-        if "<channel|>" in text:
-            reasoning, answer = text.split("<channel|>", 1)
-            return reasoning, answer.lstrip(), "gemma4_markup"
-        return text, "", "unfinished_gemma4_markup"
+        parts = []
+        while content.startswith("<|channel>thought\n"):
+            text = content.removeprefix("<|channel>thought\n")
+            tool_at, end_at = text.find("<|tool_call>"), text.find("<channel|>")
+            if tool_at >= 0 and (end_at < 0 or tool_at < end_at):
+                parts.append(text[:tool_at])
+                content = text[tool_at:]
+                break
+            if "<channel|>" not in text:
+                return "\n".join([*parts, text]), "", "unfinished_gemma4_markup"
+            reasoning, content = text.split("<channel|>", 1)
+            parts.append(reasoning)
+            content = content.lstrip()
+        return "\n".join(parts), content, "gemma4_markup"
     if "<channel|>" in content and not content.lstrip().startswith(("{", "```")):
         reasoning, answer = content.split("<channel|>", 1)
         return reasoning, answer.lstrip(), "gemma4_prompt_open_markup"
@@ -41,6 +50,7 @@ def count_reasoning_ids(
     prompt: list[int],
     start: list[int],
     end: list[int],
+    implicit_end: list[int] | None = None,
 ) -> tuple[int, int]:
     """Count actual IDs strictly inside thinking markers, excluding structural markers.
 
@@ -54,7 +64,10 @@ def count_reasoning_ids(
     thinking = last_start > last_end
     reasoning = overhead = i = 0
     while i < len(output):
-        if output[i : i + len(start)] == start:
+        if implicit_end and output[i : i + len(implicit_end)] == implicit_end:
+            thinking = False
+            i += len(implicit_end)  # Tool markers belong to the response.
+        elif output[i : i + len(start)] == start:
             overhead += len(start)
             thinking = True
             i += len(start)
@@ -114,6 +127,7 @@ class TokenAccounting:
                         prompt_ids,
                         self.config.reasoning_start_token_ids,
                         self.config.reasoning_end_token_ids,
+                        self.config.reasoning_implicit_end_token_ids,
                     )
                     reasoning_source = "output_token_ids"
         if reasoning_count == 0 and reasoning and reasoning.strip():

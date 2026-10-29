@@ -60,6 +60,7 @@ class AccountingConfig:
     token_id_format: str = ""  # "" | gemma4 | qwen3
     reasoning_start_token_ids: list[int] = field(default_factory=list)
     reasoning_end_token_ids: list[int] = field(default_factory=list)
+    reasoning_implicit_end_token_ids: list[int] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

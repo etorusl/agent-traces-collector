@@ -47,3 +47,4 @@ token_id_format = "gemma4"
 # Verified against /tokenize, using add_special_tokens=false.
 reasoning_start_token_ids = [100, 45518, 107] # <|channel>thought\n
 reasoning_end_token_ids = [101] # <channel|>
+reasoning_implicit_end_token_ids = [48] # <|tool_call> (belongs to response)
