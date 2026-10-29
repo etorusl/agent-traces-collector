@@ -56,6 +56,10 @@ class AccountingConfig:
     reasoning_mode: str = "auto"  # auto | disabled
     tokenizer: str = ""
     tokenizer_revision: str = ""
+    # Optional exact span counting from actual generated IDs; markers are verified on the server.
+    token_id_format: str = ""  # "" | gemma4 | qwen3
+    reasoning_start_token_ids: list[int] = field(default_factory=list)
+    reasoning_end_token_ids: list[int] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -123,6 +127,24 @@ class Config:
             raise ValueError("search_provider must be none or brave")
         if self.accounting.reasoning_mode not in {"auto", "disabled"}:
             raise ValueError("reasoning_mode must be auto or disabled")
+        ac = self.accounting
+        if ac.token_id_format not in {"", "gemma4", "qwen3"}:
+            raise ValueError("token_id_format must be empty, gemma4 or qwen3")
+        if ac.token_id_format:
+            if not ac.reasoning_start_token_ids or not ac.reasoning_end_token_ids:
+                raise ValueError("Exact token ID accounting requires both marker sequences")
+            if any(
+                not isinstance(x, int) or x < 0
+                for x in ac.reasoning_start_token_ids + ac.reasoning_end_token_ids
+            ):
+                raise ValueError("Marker IDs must be nonnegative integers")
+            if (
+                m.extra_body.get("return_token_ids", True) is not True
+                or m.extra_body.get("skip_special_tokens", False) is not False
+            ):
+                raise ValueError(
+                    "Token ID accounting requires token IDs and preserved special tokens"
+                )
 
 
 def _expand(value: Any) -> Any:

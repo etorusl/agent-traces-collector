@@ -58,8 +58,16 @@ def export_rows(
                         "generated_tokens": m["generated_tokens"],
                         "reasoning_tokens": m["reasoning_tokens"],
                         "non_reasoning_tokens": m["non_reasoning_tokens"],
+                        "response_tokens": m["response_tokens"],
+                        "reasoning_overhead_tokens": m["reasoning_overhead_tokens"],
                         "prompt_tokens": m["prompt_tokens"],
                         "agent_seconds": row["agent_seconds"],
+                        "reasoning_text_tokens_estimate": m["text_token_estimates"][
+                            "reasoning_text_tokens"
+                        ]["total"],
+                        "response_text_tokens_estimate": m["text_token_estimates"][
+                            "response_text_tokens"
+                        ]["total"],
                     },
                     "provenance": {
                         "experiment_id": row["experiment_id"],
@@ -106,7 +114,7 @@ def describe_run(root: Path) -> dict[str, Any]:
         "complete_usage": sum(r["metrics"]["usage_complete"] for r in rows),
         "complete_reasoning": sum(r["metrics"]["reasoning_complete"] for r in rows),
     }
-    for name in ("generated_tokens", "reasoning_tokens", "non_reasoning_tokens"):
+    for name in ("generated_tokens", "reasoning_tokens", "non_reasoning_tokens", "response_tokens"):
         values = sorted(r["metrics"][name] for r in solved if r["metrics"][name] is not None)
         output[name] = {
             "solved_count_with_measurement": len(values),

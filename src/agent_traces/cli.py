@@ -15,7 +15,7 @@ from .agent import collect_task
 from .benchmarks import TaskSpec, load_gaia, prepare_gaia
 from .config import load_config
 from .export import describe_run, export_rows
-from .model import ModelClient
+from .model import ModelClient, server_identity
 from .store import RunStore, runtime_info
 from .util import digest, file_digest
 from .worker import list_appworld
@@ -50,12 +50,17 @@ def _tasks(config) -> list[TaskSpec]:
             )
         )
     # Base databases affect all tasks, and must not change underneath a resumed experiment.
-    base = root / "data" / "base_dbs"
+    base = root / "data"
     base_hash = digest(
-        {str(p.relative_to(base)): file_digest(p) for p in sorted(base.rglob("*")) if p.is_file()}
+        {
+            str(p.relative_to(base)): file_digest(p)
+            for name in ("base_dbs", "api_docs")
+            for p in sorted((base / name).rglob("*"))
+            if p.is_file()
+        }
     )
     for task in tasks:
-        task.provenance["base_dbs_sha256"] = base_hash
+        task.provenance["shared_data_sha256"] = base_hash
     return tasks
 
 
@@ -74,7 +79,8 @@ def run(args) -> None:
         if wanted - available:
             raise ValueError(f"Unknown task IDs: {sorted(wanted - available)}")
         tasks = [t for t in tasks if t.task_id in wanted]
-    tasks = tasks[: args.limit]
+    if not args.all:
+        tasks = tasks[: args.limit]
     if not tasks:
         raise ValueError("No tasks selected")
     identity = {
@@ -89,18 +95,23 @@ def run(args) -> None:
         model = ModelClient(config.model, TokenAccounting(config.accounting))
         # Save server identity and require the configured served ID to exist.
         models = model.models()
+        markers = model.verify_accounting()
         ids = {m["id"] for m in models.get("data", [])}
         if config.model.name not in ids:
             raise ValueError(f"Served model {config.model.name!r} not in /models: {sorted(ids)}")
         server_path = store.root / "server.json"
         if server_path.exists():
             previous = json.loads(server_path.read_text())
-            if previous != models:
+            if server_identity(previous) != server_identity(models):
                 raise ValueError("Server /models changed; use a new experiment directory")
         else:
             from .util import atomic_json
 
             atomic_json(server_path, models)
+        if markers:
+            from .util import atomic_json
+
+            atomic_json(store.root / "token_markers.json", markers)
         previous = {(s["task_id"], s["repeat"]): s for s in store.summaries()}
         for task in tasks:
             for repeat in range(args.repeats):
@@ -159,6 +170,9 @@ def doctor(args) -> None:
     model = ModelClient(config.model, accounting)
     try:
         print(json.dumps({"server_models": model.models()}, indent=2))
+        markers = model.verify_accounting()
+        if markers:
+            print(json.dumps({"verified_token_markers": markers}, indent=2))
         if args.probe:
             events = []
             model.complete(
@@ -197,6 +211,7 @@ def main() -> None:
     p.add_argument("--config", required=True)
     p.add_argument("--output", required=True)
     p.add_argument("--limit", type=int, default=3)
+    p.add_argument("--all", action="store_true", help="Select all tasks instead of --limit")
     p.add_argument("--repeats", type=int, default=1)
     p.add_argument("--task-id", action="append")
     p.add_argument("--resume", action="store_true")

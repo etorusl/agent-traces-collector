@@ -17,6 +17,14 @@ class ModelFailure(RuntimeError):
     pass
 
 
+def server_identity(models: dict[str, Any]) -> list[dict[str, Any]]:
+    # ModelCard.created and permission IDs are generated anew by some vLLM versions.
+    fields = ("id", "root", "parent", "max_model_len", "owned_by")
+    return sorted(
+        ({k: m.get(k) for k in fields} for m in models.get("data", [])), key=lambda m: m["id"]
+    )
+
+
 class ModelClient:
     def __init__(self, config: ModelConfig, accounting: TokenAccounting):
         self.config, self.accounting = config, accounting
@@ -35,6 +43,39 @@ class ModelClient:
             response = self.client.get("models", timeout=self.config.request_timeout_seconds)
             response.raise_for_status()
             return response.json()
+
+    def verify_accounting(self) -> dict[str, Any] | None:
+        cfg = self.accounting.config
+        if not cfg.token_id_format:
+            return None
+        markers = {
+            "gemma4": ("<|channel>thought\n", "<channel|>"),
+            "qwen3": ("<think>", "</think>"),
+        }[cfg.token_id_format]
+        expected = (cfg.reasoning_start_token_ids, cfg.reasoning_end_token_ids)
+        root = self.config.base_url.rstrip("/").removesuffix("/v1")
+        result = {}
+        for marker, ids in zip(markers, expected, strict=True):
+            with time_limit(self.config.request_timeout_seconds):
+                response = self.client.post(
+                    root + "/tokenize",
+                    json={
+                        "model": self.config.name,
+                        "prompt": marker,
+                        "add_special_tokens": False,
+                    },
+                    timeout=self.config.request_timeout_seconds,
+                )
+                response.raise_for_status()
+                actual = response.json()["tokens"]
+            if actual != ids:
+                raise ValueError(f"Server token marker mismatch for {marker!r}: {actual} != {ids}")
+            result[marker] = actual
+        return {
+            "format": cfg.token_id_format,
+            "markers": result,
+            "reasoning_definition": "generated IDs strictly inside thinking markers",
+        }
 
     def complete(
         self,
@@ -55,6 +96,8 @@ class ModelClient:
             "max_tokens": min(cfg.max_tokens, max_tokens),
             **cfg.extra_body,
         }
+        if self.accounting.config.token_id_format:
+            payload.update(return_token_ids=True, skip_special_tokens=False)
         for attempt in range(cfg.retries + 1):
             remaining = deadline - time.perf_counter()
             if remaining <= 0:
@@ -89,6 +132,13 @@ class ModelClient:
                         raw = response.json()
                         event["response"] = raw
                         event["accounting"] = self.accounting.measure(raw)
+                        if raw.get("model", cfg.name) != cfg.name:
+                            raise ValueError("Response model ID differs from configured model")
+                        expected = cfg.server_metadata.get("system_fingerprint")
+                        if expected and raw.get("system_fingerprint") != expected:
+                            raise ValueError(
+                                "Response system_fingerprint differs from configuration"
+                            )
                         choices = raw.get("choices") or []
                         if len(choices) != 1 or not isinstance(choices[0].get("message"), dict):
                             event["error"] = "Expected exactly one Chat Completions choice"

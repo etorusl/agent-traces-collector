@@ -56,14 +56,18 @@ class TraceWriter:
         self.secrets = [s for s in secrets if s and len(s) >= 6]
         self.sequence = 0
 
-    def emit(self, event_type: str, **data: Any) -> None:
-        self.sequence += 1
-        row = {"sequence": self.sequence, "time": now(), "event_type": event_type, **data}
-        text = json.dumps(row, ensure_ascii=False, allow_nan=False)
+    def clean(self, value: Any) -> Any:
+        text = json.dumps(value, ensure_ascii=False, allow_nan=False)
         for secret in self.secrets:
             # Replace JSON-escaped versions too, without invalidating JSON syntax.
             escaped = json.dumps(secret, ensure_ascii=False)[1:-1]
             text = text.replace(escaped, "[REDACTED]")
+        return json.loads(text)
+
+    def emit(self, event_type: str, **data: Any) -> None:
+        self.sequence += 1
+        row = {"sequence": self.sequence, "time": now(), "event_type": event_type, **data}
+        text = json.dumps(self.clean(row), ensure_ascii=False, allow_nan=False)
         self.file.write(text + "\n")
         self.file.flush()
         os.fsync(self.file.fileno())
@@ -128,6 +132,10 @@ class RunStore:
                 continue
             summary = json.loads(start.read_text())
             events = read_events(start.parent / "events.jsonl")
+            terminal = [e for e in events if e["event_type"] == "attempt_finished"]
+            if terminal:
+                atomic_json(summary_path, terminal[-1]["summary"])
+                continue
             calls = [e for e in events if e["event_type"] == "llm_finished"]
             finished = {e["request_id"] for e in calls}
             pending = [
@@ -164,11 +172,13 @@ class RunStore:
             **initial,
         }
         writer = TraceWriter(self.root / "attempts" / attempt_id, secrets)
+        summary = writer.clean(summary)
         atomic_json(writer.directory / "started.json", summary)
         writer.emit("attempt_started", summary=summary)
         return writer, summary
 
     def finish(self, writer: TraceWriter, summary: dict) -> None:
+        summary.update(writer.clean(summary))
         writer.emit("attempt_finished", summary=summary)
         atomic_json(writer.directory / "summary.json", summary)
         writer.close()

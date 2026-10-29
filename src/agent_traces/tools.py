@@ -20,7 +20,8 @@ class CappedOutput(io.TextIOBase):
     def write(self, text: str) -> int:
         self.total += len(text)
         kept = text[: max(0, self.limit - self.length)]
-        self.parts.append(kept)
+        if kept:
+            self.parts.append(kept)
         self.length += len(kept)
         return len(text)
 

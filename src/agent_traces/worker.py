@@ -53,7 +53,12 @@ def _entry(pipe, task: dict, config: dict, workspace: str) -> None:
     backend = None
     try:
         # Keys used by the collector are not needed by model-generated Python.
-        for name in {config["model"]["api_key_env"], "HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"}:
+        for name in {
+            config["model"]["api_key_env"],
+            "OPENAI_API_KEY",
+            "HF_TOKEN",
+            "HUGGING_FACE_HUB_TOKEN",
+        }:
             os.environ.pop(name, None)
         if task["benchmark"] == "appworld":
             backend = AppWorldBackend(task, config, workspace)
@@ -68,7 +73,13 @@ def _entry(pipe, task: dict, config: dict, workspace: str) -> None:
                 if operation == "execute":
                     value = backend.execute(*args)
                     complete = backend.completed() if task["benchmark"] == "appworld" else False
-                    value = {"output": str(value)[:200000], "task_completed": complete}
+                    output = str(value)
+                    value = {
+                        "output": output[:200000],
+                        "output_chars": len(output),
+                        "output_truncated": len(output) > 200000,
+                        "task_completed": complete,
+                    }
                 elif operation == "evaluate" and task["benchmark"] == "appworld":
                     value = backend.evaluate()
                 else:

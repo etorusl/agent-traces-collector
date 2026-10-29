@@ -1,0 +1,49 @@
+# Verified served ID on everest.nsu.ru, 2026-10-29. Text-only collector configuration.
+[model]
+base_url = "${VLLM_BASE_URL}"
+name = "gemma-4-12B-it"
+api_key_env = "VLLM_API_KEY"
+temperature = 0.0
+top_p = 1.0
+seed = 42
+max_tokens = 4096
+request_timeout_seconds = 180
+retries = 0
+
+[model.extra_body]
+return_token_ids = true
+skip_special_tokens = false
+
+[model.extra_body.chat_template_kwargs]
+enable_thinking = true
+
+[model.server_metadata]
+vllm_version = "0.29.0"
+system_fingerprint = "vllm-0.29.0-0a92be7d"
+served_root = "/workspace/data/models/gemma-4-12B-it"
+max_model_len = 60000
+checkpoint_revision = "NOT_EXPOSED_BY_ENDPOINT"
+quantization = "NOT_EXPOSED_BY_ENDPOINT"
+reasoning_parser = "NOT_EXPOSED_BY_ENDPOINT"
+
+[agent]
+max_steps = 30
+max_generated_tokens = 20000
+max_task_seconds = 600
+tool_timeout_seconds = 60
+setup_timeout_seconds = 180
+evaluation_timeout_seconds = 120
+max_observation_chars = 20000
+max_protocol_errors = 3
+
+[benchmark]
+name = "appworld"
+split = "dev"
+appworld_root = "data/appworld"
+
+[accounting]
+reasoning_mode = "auto"
+token_id_format = "gemma4"
+# Verified against /tokenize, using add_special_tokens=false.
+reasoning_start_token_ids = [100, 45518, 107] # <|channel>thought\n
+reasoning_end_token_ids = [101] # <channel|>
