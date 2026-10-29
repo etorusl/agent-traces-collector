@@ -2,6 +2,7 @@
 [model]
 base_url = "${VLLM_BASE_URL}"
 name = "gemma-4-12B-it"
+family = "gemma4"
 api_key_env = "VLLM_API_KEY"
 temperature = 0.0
 top_p = 1.0

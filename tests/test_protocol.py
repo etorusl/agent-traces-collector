@@ -1,7 +1,11 @@
 import pytest
 
 from agent_traces.accounting import split_reasoning
-from agent_traces.agent import parse_action
+from agent_traces.agent import parse_action as parse_family_action
+
+
+def parse_action(text):
+    return parse_family_action(text, "gemma4")
 
 
 def test_gemma_native_python_preserves_arbitrary_code():
@@ -54,3 +58,26 @@ def test_gemma_tool_marker_can_end_thinking_implicitly():
     reasoning, content, _ = split_reasoning({"content": text})
     assert reasoning == "reasoning"
     assert parse_action(content)["tool"] == "python"
+
+
+def test_observed_gemma_tool_namespace_alias():
+    assert parse_action('<|tool_call>call:tool:python{code:<|"|>print(1)<|"|>}<tool_call|>') == {
+        "tool": "python",
+        "arguments": {"code": "print(1)"},
+    }
+
+
+def test_observed_json_wrapper_is_unwrapped_without_eval():
+    assert (
+        parse_action(
+            '<|tool_call>call:{"tool":"python","arguments":{"code":"print(1)"}}<tool_call|>'
+        )["tool"]
+        == "python"
+    )
+
+
+def test_family_protocols_do_not_guess_each_others_final_answers():
+    assert parse_action("4") == {"final_answer": "4"}
+    assert parse_action("plain final answer") == {"final_answer": "plain final answer"}
+    with pytest.raises(ValueError):
+        parse_family_action("plain final answer", "qwen3")

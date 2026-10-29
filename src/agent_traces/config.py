@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 class ModelConfig:
     base_url: str = "http://localhost:8000/v1"
     name: str = "UNCONFIGURED"
+    family: str = "json"  # json | qwen3 | gemma4
     api_key_env: str = "VLLM_API_KEY"
     temperature: float = 0.6
     top_p: float = 0.95
@@ -82,6 +83,8 @@ class Config:
             raise ValueError("Do not put credentials, query parameters or fragments in base_url")
         if not m.name or m.name == "UNCONFIGURED":
             raise ValueError("Set model.name to the exact served model ID")
+        if m.family not in {"json", "qwen3", "gemma4"}:
+            raise ValueError("model.family must be json, qwen3 or gemma4")
         for value in (
             m.max_tokens,
             m.request_timeout_seconds,
@@ -136,7 +139,11 @@ class Config:
                 raise ValueError("Exact token ID accounting requires both marker sequences")
             if any(
                 not isinstance(x, int) or x < 0
-                for x in ac.reasoning_start_token_ids + ac.reasoning_end_token_ids
+                for x in (
+                    ac.reasoning_start_token_ids
+                    + ac.reasoning_end_token_ids
+                    + ac.reasoning_implicit_end_token_ids
+                )
             ):
                 raise ValueError("Marker IDs must be nonnegative integers")
             if (

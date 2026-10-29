@@ -265,3 +265,24 @@ def test_protocol_error_tokens_are_included(experiment):
     assert result["success"] is True
     assert result["protocol_errors"] == 1
     assert result["metrics"]["generated_tokens"] == 20
+
+
+def test_gemma_profile_uses_native_prompt_and_preserves_native_history(experiment):
+    config, store, model = experiment
+    config = dataclasses.replace(config, model=dataclasses.replace(config.model, family="gemma4"))
+    requests = []
+    native = '<|tool_call>call:python{code:<|"|>print(2+2)<|"|>}<tool_call|>'
+
+    def transport(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(200, json=make_response(native if len(requests) == 1 else "4"))
+
+    model.client = httpx.Client(
+        transport=httpx.MockTransport(transport), base_url="http://fixture/v1/"
+    )
+    result = collect_task(
+        TaskSpec("gaia", "validation", "fixture", "2+2?", "4"), 0, config, model, store
+    )
+    assert result["success"] is True
+    assert "Use Gemma native tool-call syntax" in requests[0]["messages"][0]["content"]
+    assert requests[1]["messages"][-2]["content"] == native
