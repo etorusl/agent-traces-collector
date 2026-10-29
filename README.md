@@ -8,7 +8,7 @@
 ## Быстрый запуск
 
 Linux/macOS, Python 3.12 и [uv](https://docs.astral.sh/uv/).
-На этой машине окружение `.venv` и данные AppWorld уже подготовлены.
+На этой машине окружение `.venv` и данные обоих бенчмарков уже подготовлены.
 Для новой машины, из корня репозитория:
 
 ```bash
@@ -29,9 +29,10 @@ export VLLM_MODEL='exact-served-model-id'
 # При необходимости также задайте VLLM_API_KEY и HF_TOKEN.
 ```
 
-`VLLM_MODEL` должен совпадать с ID из `GET /v1/models`, включая алиас
+В шаблонах Qwen3 `VLLM_MODEL` должен совпадать с ID из `GET /v1/models`, включая алиас
 `--served-model-name`, если он задан. Ключи читаются из окружения; `.env` **не**
 подгружается автоматически. Имена переменных есть в [.env.example](.env.example).
+В проверенном профиле Gemma served ID уже задан явно.
 
 Подготовка данных на новой машине:
 
@@ -49,15 +50,16 @@ GAIA скачивается из официального gated-репозито
 Создайте локальные конфигурации и внесите точные сведения о сервере:
 
 ```bash
-cp configs/appworld.toml configs/appworld.local.toml
-cp configs/gaia.toml configs/gaia.local.toml
+cp configs/gemma-appworld.toml configs/appworld.local.toml
+cp configs/gemma-gaia.toml configs/gaia.local.toml
 ```
 
-В `[model.server_metadata]` заполните checkpoint revision, quantization,
+В `[model.server_metadata]` внесите известные checkpoint revision, quantization,
 версию vLLM и reasoning parser. По одному `/models` нельзя проверить неизменность
-весов и chat template. Шаблоны настроены на Qwen3 с thinking; после получения
-точного ID модели проверьте `enable_thinking` и parser. Для другой модели
-измените или удалите соответствующий `chat_template_kwargs`.
+весов и chat template. Выше выбран проверенный профиль Gemma 4. Для будущего
+Qwen3 используйте шаблоны `configs/appworld.toml` и `configs/gaia.toml`;
+они подготовлены, но пока не проверены на настоящем Qwen endpoint.
+Семейство выбирается явно в `model.family`.
 
 Проверка данных и сервера, затем по **3 задачи** каждого бенчмарка:
 
@@ -116,8 +118,8 @@ trace-collector run --config configs/gaia.local.toml --output runs/gaia-repeats 
 без восстановления истории и без изменения старой трассы.
 
 Нельзя продолжить каталог эксперимента с изменённым кодом, зависимостями,
-конфигурацией, данными выбранных задач или числом повторов. Изменение ответа
-содержательных полей `/models` тоже требует нового каталога; динамические
+конфигурацией, данными выбранных задач или числом повторов. Изменение
+содержательных полей ответа `/models` тоже требует нового каталога; динамические
 `created` и permission IDs игнорируются. Одновременная запись в один каталог
 блокируется. Запуски последовательные: конкурентность не смешивается с
 измерениями времени и AppWorld-состоянием.
@@ -155,8 +157,8 @@ Python инструмента GAIA выполняет локальный код 
 ```bash
 export VLLM_BASE_URL='http://everest.nsu.ru:9022/v1'
 trace-collector doctor --config configs/gemma-appworld.toml --probe
-trace-collector run --config configs/gemma-appworld.toml --output runs/gemma-appworld-smoke --limit 3
-trace-collector run --config configs/gemma-gaia.toml --output runs/gemma-gaia-smoke --limit 3
+trace-collector run --config configs/gemma-appworld.toml --output runs/gemma-appworld --limit 3
+trace-collector run --config configs/gemma-gaia.toml --output runs/gemma-gaia --limit 3
 ```
 
 В этих конфигурациях thinking включён явно. Этот сервер не возвращает reasoning
@@ -234,8 +236,10 @@ APPWORLD_TEST_ROOT="$PWD/data/appworld" pytest -q
 Тесты используют временные синтетические задания и ответы HTTP-заглушки,
 а интеграционная проверка AppWorld — настоящий engine и evaluator.
 Это проверка сборщика, а не измерение качества или стоимости настоящей модели.
-Для Gemma подготовлены реальные прогоны по 3 задачи. Трассы сохраняются локально
-в `runs/`; агрегированные результаты и ограничения — в отчёте smoke-прогона.
+Gemma проверена на реальных прогонах по 3 задачи: AppWorld — 1/3 успешных,
+GAIA без поиска — 0/3. Все счётчики полные; незавершённые попытки не выдаются
+за успешные метки. [Подробный отчёт](docs/smoke-results.md).
+Трассы и выгрузки сохраняются локально в `runs/` и `exports/`.
 
 ## Принятые ограничения эксперимента
 
