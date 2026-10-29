@@ -1,0 +1,44 @@
+# Paths are resolved relative to the working directory. Copy to *.local.toml to customize.
+[model]
+base_url = "${VLLM_BASE_URL}"
+name = "${VLLM_MODEL}"
+api_key_env = "VLLM_API_KEY"
+temperature = 0.6
+top_p = 0.95
+seed = 42
+max_tokens = 4096
+request_timeout_seconds = 180
+retries = 0
+
+[model.extra_body.chat_template_kwargs]
+enable_thinking = true
+
+[model.server_metadata]
+# Fill from the server operator; /models cannot prove checkpoint/template identity.
+checkpoint_revision = "UNRECORDED"
+quantization = "UNRECORDED"
+vllm_version = "UNRECORDED"
+reasoning_parser = "UNRECORDED"
+
+[agent]
+max_steps = 40
+max_generated_tokens = 60000
+max_task_seconds = 1800
+tool_timeout_seconds = 60
+setup_timeout_seconds = 180
+evaluation_timeout_seconds = 120
+max_observation_chars = 20000
+max_protocol_errors = 3
+
+[benchmark]
+name = "gaia"
+split = "validation"
+gaia_root = "data/gaia"
+gaia_year = "2023"
+search_provider = "none"
+
+[accounting]
+reasoning_mode = "auto"
+# Optional estimates, never substituted for authoritative server usage:
+# tokenizer = "Qwen/Qwen3-30B-A3B"
+# tokenizer_revision = "exact checkpoint/tokenizer commit"
