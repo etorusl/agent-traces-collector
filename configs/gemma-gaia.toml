@@ -3,19 +3,21 @@ base_url = "${VLLM_BASE_URL}"
 name = "gemma-4-12B-it"
 family = "gemma4"
 api_key_env = "VLLM_API_KEY"
-temperature = 0.0
-top_p = 1.0
+temperature = 1.0
+top_p = 0.95
 seed = 42
 max_tokens = 4096
 request_timeout_seconds = 180
 retries = 0
 
 [model.extra_body]
+top_k = 64
 return_token_ids = true
 skip_special_tokens = false
 
 [model.extra_body.chat_template_kwargs]
 enable_thinking = true
+preserve_thinking = true
 
 [model.server_metadata]
 vllm_version = "0.29.0"

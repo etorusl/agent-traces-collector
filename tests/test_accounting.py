@@ -151,3 +151,15 @@ def test_native_tool_boundary_is_charged_as_response_not_reasoning():
     assert count_reasoning_ids(
         [100, 45518, 107, 10, 48, 30, 106], [], [100, 45518, 107], [101], [48]
     ) == (1, 3)
+
+
+def test_gemma_prefilled_thought_channel_is_input_not_output_overhead():
+    assert count_reasoning_ids(
+        [101, 30, 106], [100, 45518, 107], [100, 45518, 107], [101], [48]
+    ) == (0, 1)
+
+
+def test_implicit_tool_boundary_in_prompt_closes_prior_reasoning():
+    assert count_reasoning_ids(
+        [30, 106], [100, 45518, 107, 10, 48, 20], [100, 45518, 107], [101], [48]
+    ) == (0, 0)

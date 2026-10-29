@@ -124,8 +124,10 @@ trace-collector run --config configs/gaia.local.toml --output runs/gaia-repeats 
 
 ## Что реализовано
 
-- Собственный текстовый агент с JSON-действиями через Chat Completions;
-  серверный function-calling parser ему не требуется. Нет скрытых вызовов judge-модели.
+- Собственный текстовый агент через Chat Completions с отдельными
+  [профилями семейств](configs/README.md): JSON-действия для Qwen3,
+  нативные действия и финальный текст для Gemma 4. Серверный function-calling
+  parser ему не требуется. Нет скрытых вызовов judge-модели.
 - AppWorld: штатный `world.execute`, `task_completed` и state-based `world.evaluate`.
   Задания стартуют с чистого состояния; агент не получает ground truth или сложность.
 - GAIA: официальный Parquet, копирование вложений в отдельный workspace,
@@ -170,6 +172,13 @@ breakdown, поэтому используется точный счётчик �
 Источник счётчика — `output_token_ids`; текст не ретокенизируется.
 Если токенов/границ не хватает для точного счёта, reasoning остаётся `null`.
 Для обычного режима без token ID accounting действуют правила server usage ниже.
+
+Параметры Gemma соответствуют официальному
+[generation_config](https://huggingface.co/google/gemma-4-12B-it/blob/main/generation_config.json):
+`temperature=1.0`, `top_p=0.95`, `top_k=64`. Внутри инструментального хода
+Gemma получает прежний reasoning через `assistant.reasoning` и результаты через
+`role=tool`; Qwen3 использует историю без reasoning. Эти различия входят в
+фиксированную конфигурацию и SHA кода эксперимента.
 
 Для каждого запроса пользователя суммируются **все** генерации агента:
 
@@ -225,7 +234,8 @@ APPWORLD_TEST_ROOT="$PWD/data/appworld" pytest -q
 Тесты используют временные синтетические задания и ответы HTTP-заглушки,
 а интеграционная проверка AppWorld — настоящий engine и evaluator.
 Это проверка сборщика, а не измерение качества или стоимости настоящей модели.
-Боевой прогон по 3 задачи запускается после добавления endpoint и HF-токена.
+Для Gemma подготовлены реальные прогоны по 3 задачи. Трассы сохраняются локально
+в `runs/`; агрегированные результаты и ограничения — в отчёте smoke-прогона.
 
 ## Принятые ограничения эксперимента
 

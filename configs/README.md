@@ -6,7 +6,7 @@
 
 | Семейство | Конфигурации | Протокол | Статус |
 | --- | --- | --- | --- |
-| Gemma 4 | `gemma-appworld.toml`, `gemma-gaia.toml` | Нативные tool calls, обычный финальный текст, thinking channels и output token IDs | Проверяется на настоящем gemma-4-12B-it |
+| Gemma 4 | `gemma-appworld.toml`, `gemma-gaia.toml` | Нативные tool calls, reasoning внутри tool-turn, обычный финальный текст и output token IDs | Проверяется на настоящем gemma-4-12B-it |
 | Qwen3 | `appworld.toml`, `gaia.toml` | JSON-действия, reasoning/reasoning_content или think-теги | Подготовлен; реальный endpoint ещё не проверен |
 | JSON | `model.family="json"` | Строгий JSON с tool/arguments или final_answer | Только базовый протокол для совместимых моделей |
 

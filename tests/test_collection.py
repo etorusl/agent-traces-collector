@@ -9,7 +9,7 @@ from agent_traces.accounting import TokenAccounting
 from agent_traces.agent import collect_task
 from agent_traces.benchmarks import TaskSpec
 from agent_traces.config import AccountingConfig, AgentConfig, Config, ModelConfig
-from agent_traces.export import export_rows
+from agent_traces.export import describe_run, export_rows
 from agent_traces.model import ModelClient
 from agent_traces.store import RunStore, read_events
 
@@ -89,6 +89,7 @@ def test_multistep_real_python_worker_totals_and_no_feature_leakage(experiment, 
     assert result["metrics"]["generated_tokens"] == 20
     assert result["metrics"]["reasoning_tokens"] == 12
     assert result["metrics"]["non_reasoning_tokens"] == 8
+    assert describe_run(store.root)["generated_tokens"]["all_attempts_total"] == 20
     assert len(requests) == 2
     assert "SECRET_ATTACHMENT_CONTENT" in requests[1]["messages"][-1]["content"]
     assert "SECRET_ATTACHMENT_CONTENT" not in str(requests[0])
@@ -152,6 +153,7 @@ def test_retry_consumption_is_explicitly_unknown(experiment):
     assert result["metrics"]["observed_generated_tokens"] == 10
     assert result["metrics"]["llm_attempts"] == 2
     assert result["metrics"]["usage_complete"] is False
+    assert describe_run(store.root)["generated_tokens"]["all_attempts_total"] is None
 
 
 def test_python_timeout_terminates_worker_and_saves_trace(experiment):
@@ -285,4 +287,9 @@ def test_gemma_profile_uses_native_prompt_and_preserves_native_history(experimen
     )
     assert result["success"] is True
     assert "Use Gemma native tool-call syntax" in requests[0]["messages"][0]["content"]
-    assert requests[1]["messages"][-2]["content"] == native
+    assistant = requests[1]["messages"][-2]
+    assert assistant["content"] is None
+    assert assistant["reasoning"] == "fixture reasoning"
+    assert assistant["tool_calls"][0]["function"]["name"] == "python"
+    assert json.loads(assistant["tool_calls"][0]["function"]["arguments"]) == {"code": "print(2+2)"}
+    assert requests[1]["messages"][-1]["role"] == "tool"

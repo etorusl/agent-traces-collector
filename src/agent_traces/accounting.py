@@ -32,6 +32,9 @@ def split_reasoning(message: dict[str, Any]) -> tuple[str | None, str, str]:
     if "<channel|>" in content and not content.lstrip().startswith(("{", "```")):
         reasoning, answer = content.split("<channel|>", 1)
         return reasoning, answer.lstrip(), "gemma4_prompt_open_markup"
+    if "<|tool_call>" in content and not content.lstrip().startswith(("{", "```", "<|tool_call>")):
+        reasoning, action = content.split("<|tool_call>", 1)
+        return reasoning, "<|tool_call>" + action, "gemma4_prompt_open_implicit_end"
     if "</think>" in content:
         before, after = content.split("</think>", 1)
         return before.removeprefix("<think>"), after.lstrip(), "think_markup"
@@ -61,6 +64,18 @@ def count_reasoning_ids(
         (i for i in range(len(prompt)) if prompt[i : i + len(start)] == start), default=-1
     )
     last_end = max((i for i in range(len(prompt)) if prompt[i : i + len(end)] == end), default=-1)
+    if implicit_end:
+        last_end = max(
+            last_end,
+            max(
+                (
+                    i
+                    for i in range(len(prompt))
+                    if prompt[i : i + len(implicit_end)] == implicit_end
+                ),
+                default=-1,
+            ),
+        )
     thinking = last_start > last_end
     reasoning = overhead = i = 0
     while i < len(output):

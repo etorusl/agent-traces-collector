@@ -115,8 +115,14 @@ def describe_run(root: Path) -> dict[str, Any]:
         "complete_reasoning": sum(r["metrics"]["reasoning_complete"] for r in rows),
     }
     for name in ("generated_tokens", "reasoning_tokens", "non_reasoning_tokens", "response_tokens"):
+        all_values = [r["metrics"][name] for r in rows if r["metrics"][name] is not None]
         values = sorted(r["metrics"][name] for r in solved if r["metrics"][name] is not None)
         output[name] = {
+            "attempt_count_with_measurement": len(all_values),
+            "all_attempts_total": sum(all_values) if len(all_values) == len(rows) else None,
+            "all_attempts_mean": sum(all_values) / len(rows)
+            if rows and len(all_values) == len(rows)
+            else None,
             "solved_count_with_measurement": len(values),
             "mean": sum(values) / len(values) if values else None,
             "min": values[0] if values else None,

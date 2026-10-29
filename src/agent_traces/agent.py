@@ -220,7 +220,7 @@ def collect_task(
             summary["steps"] = step + 1
             response = model.complete(messages, remaining_tokens, deadline, record)
             choice = response["choices"][0]
-            _, content, _ = split_reasoning(choice["message"])
+            reasoning, content, _ = split_reasoning(choice["message"])
             messages.append({"role": "assistant", "content": content})
             if choice.get("finish_reason") == "length":
                 summary["status"] = "model_length"
@@ -258,6 +258,25 @@ def collect_task(
                 summary["final_answer"] = action["final_answer"]
                 summary["status"] = "finished"
                 break
+            tool_call_id = f"call_{step + 1}"
+            if config.model.family == "gemma4":
+                # The stock Gemma template preserves reasoning only via its dedicated field.
+                # Standard tool messages keep all calls inside the same assistant turn.
+                messages[-1] = {
+                    "role": "assistant",
+                    "content": None,
+                    "reasoning": reasoning or "",
+                    "tool_calls": [
+                        {
+                            "id": tool_call_id,
+                            "type": "function",
+                            "function": {
+                                "name": action["tool"],
+                                "arguments": json.dumps(action["arguments"], ensure_ascii=False),
+                            },
+                        }
+                    ],
+                }
             tool_start = time.perf_counter()
             tool_event = {
                 "step": step + 1,
@@ -286,7 +305,17 @@ def collect_task(
             max_chars = config.agent.max_observation_chars
             if len(observation) > max_chars:
                 observation = observation[:max_chars] + "\n[observation truncated]"
-            messages.append({"role": "user", "content": "Tool observation:\n" + observation})
+            if config.model.family == "gemma4":
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "name": action["tool"],
+                        "content": observation,
+                    }
+                )
+            else:
+                messages.append({"role": "user", "content": "Tool observation:\n" + observation})
             if tool_event.get("task_completed"):
                 summary["status"] = "finished"
                 break
